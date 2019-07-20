@@ -9,10 +9,10 @@
   <title>3D Demo - shape crossing the antimeridian</title>
 
   <!-- Calcite Maps Bootstrap -->
-  <link rel="stylesheet" href="/css/calcite-maps-bootstrap.min-v0.10.css">
+  <link rel="stylesheet" href="css/calcite-maps-bootstrap.min-v0.10.css">
 
   <!-- Calcite Maps -->
-  <link rel="stylesheet" href="/css/calcite-maps-arcgis-4.x.min-v0.10.css">
+  <link rel="stylesheet" href="css/calcite-maps-arcgis-4.x.min-v0.10.css">
   <!--link rel="stylesheet" href="../../dist/css/calcite-maps.min-v0.10.css"--> <!-- works -->
 
   <!-- ArcGIS JS 4 -->
@@ -145,6 +145,8 @@
   </div> <!-- /.calcite-panels -->
 
   <script type="text/javascript">
+    // requires context path or page, i.e. http://localhost:3000/index.html or 
+    // https://jccartwright.github.io/calcite-maps-demo/ is OK, but http://localhost:3000/ is not
     var dojoConfig = {
       packages: [{
         name: "bootstrap",
@@ -172,6 +174,7 @@
       "esri/views/MapView",
       "esri/geometry/support/normalizeUtils",
       "esri/geometry/Polygon",
+      "esri/geometry/Polyline",
       "esri/views/SceneView",
       "esri/widgets/Search",
       "esri/core/watchUtils",
@@ -187,7 +190,7 @@
       "bootstrap/Tab",      
 
       "dojo/domReady!"
-    ], function(Map, Basemap, GeometryService, GraphicsLayer, Graphic, MapView, normalizeUtils, Polygon, SceneView, Search, watchUtils, query, CalciteMaps, CalciteMapsArcGIS) {
+    ], function(Map, Basemap, GeometryService, GraphicsLayer, Graphic, MapView, normalizeUtils, Polygon, Polyline, SceneView, Search, watchUtils, query, CalciteMaps, CalciteMapsArcGIS) {
         
       // App
       app = {
@@ -246,7 +249,8 @@
       app.map.add(graphicsLayer);
 
 
-      //autocast does not seem to work w/ normalizeUtils?
+      // TODO: autocast does not seem to work w/ normalizeUtils so use explicit constructor?
+      // polygon in 0-360 coordinate space
       var polygon = new Polygon({
           type: "polygon",
           rings: [
@@ -259,25 +263,103 @@
           spatialReference: { wkid: 4326 }
         });
 
+      // polygon in normal coordinates which crosses the antimeridian  
+      // var polygon = new Polygon({
+      //   type: "polygon",
+      //   rings: [
+      //     [170, -10],
+      //     [-170, -10],
+      //     [-170, 10],
+      //     [170, 10],
+      //     [170, -10]
+      //   ],
+      //   spatialReference: { wkid: 4326 }
+      // });
 
-        var fillSymbol = {
-          type: "simple-fill", // autocasts as new SimpleFillSymbol()
-          color: [227, 139, 79, 0.8],
-          outline: {
-            // autocasts as new SimpleLineSymbol()
-            color: [255, 255, 255],
-            width: 1
-          }
-        };
+      // multipart polygon, one geometry on each side of antimeridian
+      // var polygon = new Polygon({
+      //   type: "polygon",
+      //   rings: [
+      //     [[170, -10],
+      //     [180, -10],
+      //     [180, 10],
+      //     [170, 10],
+      //     [170, -10]],
+      // 
+      //     [[-180, -10],
+      //     [-170, -10],
+      //     [-170, 10],
+      //     [-180, 10],
+      //     [-180, -10]]
+      //   ],
+      //   spatialReference: { wkid: 4326 }
+      // });
+      
+      // polygon which does not cross antimeridian
+      var polygon = new Polygon({
+        type: "polygon",
+        rings: [
+          [170, -10],
+          [179.99999, -10],
+          [179.99999, 10],
+          [170, 10],
+          [170, -10]
+        ],
+        spatialReference: { wkid: 4326 }
+      });
 
-        //seems to require transforms western longitudes into 0-360, i.e. "(lon < 0 ? lon+360 : lon)"
-        normalizeUtils.normalizeCentralMeridian([polygon], app.geometryService).then(function(polygons){
-          const polygonGraphic = new Graphic({
-            geometry: polygons[0],
-            symbol: fillSymbol
-          });
-         graphicsLayer.add(polygonGraphic);
-        }); 
+
+      var fillSymbol = {
+        type: "simple-fill", // autocasts as new SimpleFillSymbol()
+        color: [227, 139, 79, 0.8],
+        outline: {
+          // autocasts as new SimpleLineSymbol()
+          color: [255, 255, 255],
+          width: 1
+        }
+      };
+
+      // TODO: why does fill not work in 2D?
+      const polygonGraphic = new Graphic({
+          geometry: polygon,
+          symbol: fillSymbol
+        });
+        graphicsLayer.add(polygonGraphic);
+
+
+        // example from API (https://developers.arcgis.com/javascript/latest/api-reference/esri-geometry-support-normalizeUtils.html#normalizeCentralMeridian)
+        // create a non-normalized line that crosses the dateline
+        // const polyline = new Polyline({
+        //   paths: [
+        //     [170, 52.68],
+        //     [190, 49.5]
+        //   ]
+        // });
+
+        // normalizeUtils.normalizeCentralMeridian([polyline],app.geometryService)
+        // .then(function(polylines){
+        //   console.log(polylines[0]);
+        //   // returns a line representing the same geometry, but
+        //   // now is normalized between -180 and 180 on the x-coordinate.
+        //   // but represents the same feature
+        //   const graphic = new Graphic({
+        //     geometry: polylines[0],
+        //     symbol: { type: "simple-line" }
+        //   });
+        // });
+
+
+        // TODO: doesn't seem to modify input geometry
+        // seems to require transforms western longitudes into 0-360, i.e. "(lon < 0 ? lon+360 : lon)"
+        // normalizeUtils.normalizeCentralMeridian([polygon], app.geometryService).then(function(polygons){
+        //   console.log(polygon);
+        //   console.log(polygons[0]);
+        //   const polygonGraphic = new Graphic({
+        //     geometry: polygons[0],
+        //     symbol: fillSymbol
+        //   });
+        //  graphicsLayer.add(polygonGraphic);
+        // }); 
         
 
       // Active view is scene
